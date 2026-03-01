@@ -1,0 +1,2 @@
+"""Cog modules for EmbedForge."""
+

@@ -1,0 +1,13 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+*.log
+.DS_Store
+guild_identities.json
+guild_identities.bak.json
+embed_templates.json
+embed_templates.bak.json
