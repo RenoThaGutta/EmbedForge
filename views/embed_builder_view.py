@@ -6,7 +6,6 @@ import discord
 
 from domain.embed_draft import EmbedDraft
 from errors.app_errors import EmbedForgeError
-from modals.advanced_modal import AdvancedModal
 from modals.author_modal import AuthorModal
 from modals.button_modal import ButtonModal
 from modals.content_modal import ContentModal
@@ -21,6 +20,7 @@ from services.permissions import can_manage_embedforge
 from services.plans import ensure_templates_enabled
 from utils.logging import get_logger
 from views.mention_views import MentionView
+from views.color_views import ColorPresetView
 from views.template_views import TemplateManageView, TemplateSelectView
 
 logger = get_logger("views.embed_builder_view")
@@ -219,7 +219,11 @@ class EmbedMakerView(discord.ui.View):
 
     @discord.ui.button(label="Set Color", style=discord.ButtonStyle.secondary, row=1)
     async def set_advanced(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(AdvancedModal(self.draft))
+        await interaction.response.send_message(
+            "Choose a preset color or switch to a custom hex value.",
+            view=ColorPresetView(self.draft),
+            ephemeral=True,
+        )
 
     @discord.ui.button(label="Edit Fields", style=discord.ButtonStyle.secondary, row=1)
     async def set_fields(self, interaction: discord.Interaction, button: discord.ui.Button):
