@@ -69,7 +69,20 @@ async def update_draft_message(interaction: discord.Interaction, draft: EmbedDra
 
     message = await channel.fetch_message(draft.edit_message_id)
     bot_user = interaction.client.user
-    if bot_user is None or message.author.id != bot_user.id:
+    if bot_user is None:
+        raise UnsafeEditTargetError("Bot user is not ready.")
+
+    # Check if the message was sent by the bot directly OR via a managed webhook
+    is_bot_message = message.author.id == bot_user.id
+    managed_webhook: discord.Webhook | None = None
+    if not is_bot_message and message.webhook_id is not None:
+        try:
+            managed_webhook = await _get_managed_webhook(channel, bot_user)
+            is_bot_message = message.webhook_id == managed_webhook.id
+        except (ValueError, discord.HTTPException):
+            pass
+
+    if not is_bot_message:
         logger.warning(
             "Rejected unsafe edit target: guild_id=%s channel_id=%s message_id=%s actor_id=%s author_id=%s",
             getattr(interaction.guild, "id", None),
@@ -84,17 +97,37 @@ async def update_draft_message(interaction: discord.Interaction, draft: EmbedDra
     view = draft.build_view()
     allowed_mentions = build_allowed_mentions(draft)
 
+    content: str | None
     if embed is not None:
-        content = str(draft.mention_text or "").strip()
-        content = content if content else None
-        await message.edit(content=content, embed=embed, view=view, allowed_mentions=allowed_mentions)
-        await record_edit_success(interaction.guild.id, draft.edit_channel_id, draft.edit_message_id)
-        return
+        content = str(draft.mention_text or "").strip() or None
+    else:
+        content = str(draft.message or "").strip()
+        if draft.mention_text:
+            content = (content + ("\n" if content else "") + str(draft.mention_text).strip()).strip()
+        content = content or None
 
-    content = str(draft.message or "").strip()
-    if draft.mention_text:
-        content = (content + ("\n" if content else "") + str(draft.mention_text).strip()).strip()
-    await message.edit(content=content or None, embed=None, view=view, allowed_mentions=allowed_mentions)
+    # Use webhook.edit_message for webhook-sent messages, otherwise use message.edit
+    if managed_webhook is not None:
+        kwargs: dict = {"allowed_mentions": allowed_mentions}
+        if content is not None:
+            kwargs["content"] = content
+        else:
+            kwargs["content"] = ""
+        if embed is not None:
+            kwargs["embed"] = embed
+        else:
+            kwargs["embeds"] = []
+        if view is not None:
+            kwargs["view"] = view
+        await managed_webhook.edit_message(message.id, **kwargs)
+    else:
+        await message.edit(
+            content=content,
+            embed=embed if embed is not None else None,
+            view=view,
+            allowed_mentions=allowed_mentions,
+        )
+
     await record_edit_success(interaction.guild.id, draft.edit_channel_id, draft.edit_message_id)
 
 
